@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>yserver test.html</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --ink: #102a43;
+      --accent: #0066cc;
+      --ok: #1f9d55;
+      --warn: #d64545;
+      --line: #d9e2ec;
+    }
+    body {
+      margin: 0;
+      padding: 20px;
+      background: radial-gradient(circle at top left, #dff3ff, var(--bg));
+      color: var(--ink);
+      font: 16px/1.4 "Segoe UI", Tahoma, sans-serif;
+    }
+    .app {
+      max-width: 920px;
+      margin: 0 auto;
+      background: var(--panel);
+      border-radius: 16px;
+      box-shadow: 0 8px 30px rgba(16, 42, 67, 0.12);
+      padding: 20px;
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 8px;
+    }
+    #status {
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    #messages {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      min-height: 220px;
+      max-height: 430px;
+      overflow: auto;
+      padding: 12px;
+      background: #fbfdff;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    input[type="text"] {
+      flex: 1;
+      min-width: 220px;
+      border-radius: 8px;
+      border: 1px solid #bcccdc;
+      padding: 10px;
+      font-size: 14px;
+    }
+    input[type="file"] {
+      border: 1px solid #bcccdc;
+      border-radius: 8px;
+      padding: 8px;
+      background: #fff;
+      min-width: 280px;
+    }
+    button {
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: white;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    .message {
+      border-bottom: 1px solid #e6edf3;
+      padding: 8px 0;
+    }
+    .sender {
+      font-weight: 600;
+      color: #334e68;
+      margin-bottom: 4px;
+    }
+    .preview {
+      max-width: 360px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      display: block;
+      margin-top: 8px;
+    }
+    #uploadInfo {
+      margin-top: 10px;
+      color: #334e68;
+      font-size: 14px;
+    }
+    #stats {
+      margin-top: 12px;
+      color: #486581;
+      font-size: 14px;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>yserver test.html</h1>
+    <p>Chunked binary upload enabled: text, images, videos, and any file type.</p>
+
+    <div class="row">
+      <input id="token" type="text" placeholder="Auth token (only needed if server requires it)" />
+      <button id="connectBtn">Connect</button>
+    </div>
+
+    <div id="status">Loading config...</div>
+    <div id="messages"></div>
+
+    <div class="row">
+      <input id="msg" type="text" placeholder="Type text message" />
+      <button id="sendText">Send Text</button>
+    </div>
+
+    <div class="row">
+      <input id="fileInput" type="file" />
+      <button id="sendFile">Send File (Chunked)</button>
+    </div>
+
+    <div id="uploadInfo">No active upload.</div>
+    <div id="stats">Loading stats...</div>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById("status");
+    const messagesEl = document.getElementById("messages");
+    const msgEl = document.getElementById("msg");
+    const tokenEl = document.getElementById("token");
+    const fileInputEl = document.getElementById("fileInput");
+    const connectBtnEl = document.getElementById("connectBtn");
+    const sendTextEl = document.getElementById("sendText");
+    const sendFileEl = document.getElementById("sendFile");
+    const uploadInfoEl = document.getElementById("uploadInfo");
+    const statsEl = document.getElementById("stats");
+
+    const ACK_TIMEOUT_MS = 2000;
+    const MAX_CHUNK_RETRIES = 4;
+    const encoder = new TextEncoder();
+
+    let ws = null;
+    let serverConfig = {
+      ws_url: `ws://${location.hostname || "127.0.0.1"}:9001/chat`,
+      auth_required: false,
+      chunk_size: 262144,
+      max_file_size: 268435456,
+      token_env_var: "YSERVER_TOKEN",
+    };
+    let activeUpload = null;
+    const initialQueryToken = new URL(location.href).searchParams.get("token") || "";
+    if (initialQueryToken) {
+      tokenEl.value = initialQueryToken;
+    }
+
+    function pushSystem(text) {
+      const block = document.createElement("div");
+      block.className = "message";
+      block.textContent = text;
+      messagesEl.appendChild(block);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function pushText(sender, text) {
+      const block = document.createElement("div");
+      block.className = "message";
+
+      const senderEl = document.createElement("div");
+      senderEl.className = "sender";
+      senderEl.textContent = sender;
+      block.appendChild(senderEl);
+
+      const textEl = document.createElement("div");
+      textEl.textContent = text;
+      block.appendChild(textEl);
+
+      messagesEl.appendChild(block);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function pushFile(sender, fileUrl, name, mime, size) {
+      const fileUrlWithToken = withToken(fileUrl);
+      const block = document.createElement("div");
+      block.className = "message";
+
+      const senderEl = document.createElement("div");
+      senderEl.className = "sender";
+      senderEl.textContent = `${sender} sent ${name || "a file"} (${mime || "unknown"}, ${size || 0} bytes)`;
+      block.appendChild(senderEl);
+
+      const linkEl = document.createElement("a");
+      linkEl.href = fileUrlWithToken;
+      linkEl.download = name || "download.bin";
+      linkEl.rel = "noopener";
+      linkEl.textContent = "Download file";
+      block.appendChild(linkEl);
+
+      if ((mime || "").startsWith("image/")) {
+        const img = document.createElement("img");
+        img.className = "preview";
+        img.src = fileUrlWithToken;
+        img.alt = name || "image preview";
+        block.appendChild(img);
+      } else if ((mime || "").startsWith("video/")) {
+        const video = document.createElement("video");
+        video.className = "preview";
+        video.controls = true;
+        video.src = fileUrlWithToken;
+        block.appendChild(video);
+      } else if ((mime || "").startsWith("audio/")) {
+        const audio = document.createElement("audio");
+        audio.controls = true;
+        audio.src = fileUrlWithToken;
+        audio.style.display = "block";
+        audio.style.marginTop = "8px";
+        block.appendChild(audio);
+      }
+
+      messagesEl.appendChild(block);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function updateUploadInfo(text) {
+      uploadInfoEl.textContent = text;
+    }
+
+    function buildWsUrl() {
+      const raw = serverConfig.ws_url || `ws://${location.hostname || "127.0.0.1"}:9001/chat`;
+      const token = tokenEl.value.trim();
+      const url = new URL(raw, location.origin);
+      if (token) {
+        url.searchParams.set("token", token);
+      }
+      return url.toString();
+    }
+
+    function withToken(urlOrPath) {
+      const token = tokenEl.value.trim();
+      const url = new URL(urlOrPath, location.origin);
+      if (token) {
+        url.searchParams.set("token", token);
+      }
+      return url.toString();
+    }
+
+    function sendJson(payload) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        pushSystem("Socket is not connected.");
+        return;
+      }
+      ws.send(JSON.stringify(payload));
+    }
+
+    function parseJsonSafe(raw) {
+      try {
+        return JSON.parse(raw);
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function generateTransferId() {
+      if (typeof crypto !== "undefined" && crypto.randomUUID) {
+        return crypto.randomUUID().replace(/-/g, "");
+      }
+      return `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+    }
+
+    function buildChunkPacket(transferId, chunkIndex, totalChunks, chunkBytes) {
+      const transferBytes = encoder.encode(transferId);
+      const headerLength = 2 + transferBytes.length + 4 + 4;
+      const packet = new Uint8Array(headerLength + chunkBytes.length);
+
+      packet[0] = 1;
+      packet[1] = transferBytes.length;
+      packet.set(transferBytes, 2);
+
+      const view = new DataView(packet.buffer);
+      view.setUint32(2 + transferBytes.length, chunkIndex);
+      view.setUint32(2 + transferBytes.length + 4, totalChunks);
+      packet.set(chunkBytes, headerLength);
+      return packet;
+    }
+
+    function clearUploadTimer() {
+      if (activeUpload && activeUpload.timer) {
+        clearTimeout(activeUpload.timer);
+        activeUpload.timer = null;
+      }
+    }
+
+    function failUpload(reason) {
+      if (!activeUpload) return;
+      pushSystem(`Upload failed: ${reason}`);
+      sendJson({ cmd: "file_cancel", transfer_id: activeUpload.transferId });
+      clearUploadTimer();
+      activeUpload = null;
+      updateUploadInfo("No active upload.");
+    }
+
+    function sendCurrentChunk() {
+      if (!activeUpload || !ws || ws.readyState !== WebSocket.OPEN) return;
+      const state = activeUpload;
+      const chunkIndex = state.currentChunkIndex;
+      if (chunkIndex >= state.totalChunks) return;
+
+      const start = chunkIndex * state.chunkSize;
+      const end = Math.min(state.fileBuffer.byteLength, start + state.chunkSize);
+      const chunkData = new Uint8Array(state.fileBuffer.slice(start, end));
+      const packet = buildChunkPacket(state.transferId, chunkIndex, state.totalChunks, chunkData);
+      ws.send(packet);
+
+      clearUploadTimer();
+      state.timer = setTimeout(() => {
+        if (!activeUpload || activeUpload.transferId !== state.transferId) return;
+        if (state.retryCount >= MAX_CHUNK_RETRIES) {
+          failUpload("chunk acknowledgement timeout");
+          return;
+        }
+        state.retryCount += 1;
+        updateUploadInfo(
+          `Retrying chunk ${state.currentChunkIndex + 1}/${state.totalChunks} ` +
+          `(attempt ${state.retryCount + 1})`
+        );
+        sendCurrentChunk();
+      }, ACK_TIMEOUT_MS);
+    }
+
+    function beginChunkUpload(file) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        pushSystem("Connect first.");
+        return;
+      }
+      if (activeUpload) {
+        pushSystem("Another upload is in progress.");
+        return;
+      }
+      if (file.size <= 0) {
+        pushSystem("Cannot upload an empty file.");
+        return;
+      }
+      if (file.size > serverConfig.max_file_size) {
+        pushSystem(`File too large. Max is ${serverConfig.max_file_size} bytes.`);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const fileBuffer = reader.result;
+        if (!(fileBuffer instanceof ArrayBuffer)) {
+          pushSystem("Unable to read file.");
+          return;
+        }
+
+        const transferId = generateTransferId();
+        const chunkSize = Math.max(1024, Number(serverConfig.chunk_size) || 262144);
+        const totalChunks = Math.ceil(fileBuffer.byteLength / chunkSize);
+        activeUpload = {
+          transferId,
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          fileSize: fileBuffer.byteLength,
+          fileBuffer,
+          chunkSize,
+          totalChunks,
+          currentChunkIndex: 0,
+          retryCount: 0,
+          timer: null,
+        };
+
+        updateUploadInfo(`Starting upload: ${file.name} (${fileBuffer.byteLength} bytes)`);
+        sendJson({
+          cmd: "file_start",
+          transfer_id: transferId,
+          name: file.name,
+          mime: file.type || "application/octet-stream",
+          size: fileBuffer.byteLength,
+          total_chunks: totalChunks,
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function handleChunkAck(payload) {
+      if (!activeUpload) return;
+      if (payload.transfer_id !== activeUpload.transferId) return;
+      if (Number(payload.chunk_index) !== activeUpload.currentChunkIndex) return;
+
+      clearUploadTimer();
+      activeUpload.retryCount = 0;
+      activeUpload.currentChunkIndex += 1;
+
+      if (activeUpload.currentChunkIndex >= activeUpload.totalChunks) {
+        updateUploadInfo(
+          `Upload complete: ${activeUpload.fileName}. Waiting for file broadcast...`
+        );
+        activeUpload = null;
+        return;
+      }
+
+      const sent = activeUpload.currentChunkIndex;
+      const total = activeUpload.totalChunks;
+      updateUploadInfo(`Uploading ${activeUpload.fileName}: chunk ${sent}/${total}`);
+      sendCurrentChunk();
+    }
+
+    function handleSocketMessage(event) {
+      const payload = parseJsonSafe(event.data);
+      if (!payload) {
+        pushSystem(String(event.data));
+        return;
+      }
+
+      if (payload.type === "text") {
+        pushText(payload.sender || "server", payload.text || "");
+        return;
+      }
+      if (payload.type === "file") {
+        pushFile(
+          payload.sender || "server",
+          payload.url || "#",
+          payload.name || "file",
+          payload.mime || "application/octet-stream",
+          payload.size || 0
+        );
+        return;
+      }
+      if (payload.type === "file_start_ack") {
+        if (activeUpload && payload.transfer_id === activeUpload.transferId) {
+          updateUploadInfo(
+            `Uploading ${activeUpload.fileName}: chunk 1/${activeUpload.totalChunks}`
+          );
+          sendCurrentChunk();
+        }
+        return;
+      }
+      if (payload.type === "chunk_ack") {
+        handleChunkAck(payload);
+        return;
+      }
+      if (payload.type === "error") {
+        pushSystem(`Error: ${payload.message || "unknown error"}`);
+        if (activeUpload) {
+          failUpload(payload.message || "server error");
+        }
+        return;
+      }
+      if (payload.type === "file_cancelled") {
+        pushSystem(`Upload cancelled: ${payload.transfer_id}`);
+        return;
+      }
+      pushSystem(JSON.stringify(payload));
+    }
+
+    function connectSocket() {
+      const wsUrl = buildWsUrl();
+      const displayUrl = (() => {
+        try {
+          const parsed = new URL(wsUrl);
+          return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
+        } catch (_error) {
+          return wsUrl.split("?")[0];
+        }
+      })();
+      if (ws) {
+        ws.close();
+      }
+      ws = new WebSocket(wsUrl);
+      ws.binaryType = "arraybuffer";
+
+      statusEl.textContent = `Connecting to ${displayUrl}...`;
+      statusEl.style.color = "#486581";
+
+      ws.onopen = () => {
+        statusEl.textContent = `Connected (${displayUrl})`;
+        statusEl.style.color = "var(--ok)";
+        pushSystem("Connected to yserver.");
+      };
+
+      ws.onclose = () => {
+        statusEl.textContent = "Disconnected";
+        statusEl.style.color = "var(--warn)";
+        pushSystem("Disconnected.");
+        if (activeUpload) {
+          failUpload("connection closed");
+        }
+      };
+
+      ws.onerror = () => {
+        pushSystem("WebSocket error.");
+      };
+
+      ws.onmessage = handleSocketMessage;
+    }
+
+    connectBtnEl.onclick = () => connectSocket();
+
+    sendTextEl.onclick = () => {
+      const text = msgEl.value.trim();
+      if (!text) return;
+      sendJson({ cmd: "text", text });
+      msgEl.value = "";
+    };
+
+    msgEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") sendTextEl.click();
+    });
+
+    sendFileEl.onclick = () => {
+      const file = fileInputEl.files && fileInputEl.files[0];
+      if (!file) {
+        pushSystem("Pick a file first.");
+        return;
+      }
+      beginChunkUpload(file);
+      fileInputEl.value = "";
+    };
+
+    async function refreshStats() {
+      try {
+        const result = await fetch(withToken("/api/stats"), { cache: "no-store" });
+        const stats = await result.json();
+        statsEl.textContent =
+          `WS text msgs: ${stats.ws_messages} | WS binary msgs: ${stats.ws_binary_messages} | ` +
+          `WS connections: ${stats.ws_connections_opened} | Active transfers: ${stats.active_transfers} | ` +
+          `Stored files: ${stats.stored_files}`;
+      } catch (_error) {
+        statsEl.textContent = "Stats unavailable.";
+      }
+    }
+
+    async function loadConfigAndConnect() {
+      try {
+        const result = await fetch(withToken("/api/config"), { cache: "no-store" });
+        if (result.ok) {
+          const config = await result.json();
+          serverConfig = { ...serverConfig, ...config };
+          if (serverConfig.auth_required) {
+            pushSystem(
+              `Auth required. Provide token from env var ${serverConfig.token_env_var} and click Connect.`
+            );
+          }
+        }
+      } catch (_error) {
+        pushSystem("Could not load config. Using defaults.");
+      }
+      if (serverConfig.auth_required && !tokenEl.value.trim()) {
+        statusEl.textContent = "Token required before connecting.";
+        statusEl.style.color = "var(--warn)";
+        return;
+      }
+      connectSocket();
+    }
+
+    setInterval(refreshStats, 2000);
+    refreshStats();
+    loadConfigAndConnect();
+  </script>
+</body>
+</html>
