@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "yashserver"
 version = "0.1.2"
-description = "Async-first server toolkit with plugins, native WebSocket support, auth/rate limiting, and TLS."
+description = "Async-first server toolkit with plugins, native WebSocket support, auth/rate limiting, and TLS. GitHub: https://github.com/ythbambaranda-sys/yashserver"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Yasheen Bambaranda", email = "ythbambaranda@gmail.com" }]
