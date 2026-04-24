@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yashserver"
+version = "0.1.2"
+description = "Async-first server toolkit with plugins, native WebSocket support, auth/rate limiting, and TLS."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Yasheen Bambaranda", email = "ythbambaranda@gmail.com" }]
+license = { text = "MIT" }
+keywords = ["asyncio", "server", "plugin", "websocket", "tls", "auth", "rate-limit", "database"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Operating System :: OS Independent",
+  "Framework :: AsyncIO",
+]
+dependencies = [
+  "sqlalchemy>=2.0",
+  "pymongo>=4.0",
+  "redis>=5.0",
+  "cassandra-driver>=3.29",
+  "boto3>=1.34",
+  "firebase-admin>=6.0",
+  "couchbase>=4.2",
+  "elasticsearch>=8.0",
+  "neo4j>=5.0",
+  "influxdb-client>=1.40",
+  "duckdb>=1.0",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
