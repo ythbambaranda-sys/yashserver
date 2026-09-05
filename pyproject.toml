@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yashserver"
+version = "1.0.0"
+description = "Multi-protocol asyncio server toolkit: TCP, UDP, HTTP and WebSocket with TLS, auth, rate limiting, plugins and metrics. GitHub: https://github.com/ythbambaranda-sys/yashserver"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "yashserver contributors" }]
+keywords = [
+  "asyncio",
+  "server",
+  "tcp",
+  "udp",
+  "http",
+  "websocket",
+  "tls",
+  "networking",
+  "multi-protocol",
+  "plugin",
+  "auth",
+  "rate-limit",
+  "database",
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Framework :: AsyncIO",
+  "Intended Audience :: Developers",
+  "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+  "Topic :: Internet :: WWW/HTTP :: WSGI :: Server",
+  "Topic :: Software Development :: Libraries :: Application Frameworks",
+  "Topic :: System :: Networking",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+homepage = "https://github.com/ythbambaranda-sys/yashserver"
+source = "https://github.com/ythbambaranda-sys/yashserver"
+documentation = "https://github.com/ythbambaranda-sys/yashserver/tree/main/docs"
+issues = "https://github.com/ythbambaranda-sys/yashserver/issues"
+
+[project.optional-dependencies]
+db = [
+  "sqlalchemy>=2.0",
+  "pymongo>=4.0",
+  "redis>=5.0",
+  "cassandra-driver>=3.29",
+  "boto3>=1.34",
+  "firebase-admin>=6.0",
+  "couchbase>=4.2",
+  "elasticsearch>=8.0",
+  "neo4j>=5.0",
+  "influxdb-client>=1.40",
+  "duckdb>=1.0",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+yashserver = ["ddosprotblockedmsg.html", "py.typed"]

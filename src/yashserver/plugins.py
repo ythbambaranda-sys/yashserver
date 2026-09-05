@@ -1,0 +1,56 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from .plugin import ServerPlugin
+
+
+@dataclass
+class ConnectionStatsPlugin(ServerPlugin):
+    """Tracks message volume and connection events."""
+
+    name: str = "connection-stats"
+    tcp_connections_opened: int = 0
+    ws_connections_opened: int = 0
+    tcp_messages: int = 0
+    ws_messages: int = 0
+    ws_binary_messages: int = 0
+    udp_datagrams: int = 0
+    udp_endpoints_seen: int = 0
+
+    async def on_tcp_connect(self, client: Any, server: Any) -> None:
+        self.tcp_connections_opened += 1
+
+    async def on_ws_connect(self, session: Any, server: Any) -> None:
+        self.ws_connections_opened += 1
+
+    async def on_tcp_message(self, client: Any, message: str, server: Any) -> str | None:
+        self.tcp_messages += 1
+        return message
+
+    async def on_ws_message(self, session: Any, message: str, server: Any) -> str | None:
+        self.ws_messages += 1
+        return message
+
+    async def on_ws_binary_message(self, session: Any, data: bytes, server: Any) -> bytes | None:
+        self.ws_binary_messages += 1
+        return data
+
+    async def on_udp_datagram(self, datagram: Any, server: Any) -> Any:
+        self.udp_datagrams += 1
+        return datagram
+
+    async def on_udp_endpoint_seen(self, endpoint: Any, server: Any) -> None:
+        self.udp_endpoints_seen += 1
+
+    def snapshot(self) -> dict[str, int]:
+        return {
+            "tcp_connections_opened": self.tcp_connections_opened,
+            "ws_connections_opened": self.ws_connections_opened,
+            "tcp_messages": self.tcp_messages,
+            "ws_messages": self.ws_messages,
+            "ws_binary_messages": self.ws_binary_messages,
+            "udp_datagrams": self.udp_datagrams,
+            "udp_endpoints_seen": self.udp_endpoints_seen,
+        }

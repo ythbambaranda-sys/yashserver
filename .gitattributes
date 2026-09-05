@@ -1,0 +1,29 @@
+# Normalise line endings in the repository to LF, and let Git decide what to
+# check out per platform. Without this, `core.autocrlf=true` on Windows checks
+# shell scripts out with CRLF, and a CRLF script is unrunnable on Linux --
+# bash reports "bad interpreter: /usr/bin/env bash^M".
+* text=auto eol=lf
+
+# Files that must stay LF wherever they are checked out, because something
+# other than a text editor consumes them.
+*.sh text eol=lf
+*.py text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Windows-only scripts keep CRLF.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Never touch these.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.rar binary
+*.whl binary

@@ -1,0 +1,34 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+
+# Packaging / build output
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+.venv_pypi_test/
+
+# Test / coverage output
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+
+# Credentials -- never commit these
+pypikey.txt
+*.pem
+*.key
+.pypirc
+
+# Editor / tooling
+.obsidian/
+.idea/
+.vscode/
+*.swp
+.DS_Store
