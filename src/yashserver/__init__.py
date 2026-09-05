@@ -17,7 +17,7 @@ specific: UDP talks about endpoints, HTTP about requests and status codes,
 WebSocket about messages and rooms.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 from .core import (
     AuthConfig,

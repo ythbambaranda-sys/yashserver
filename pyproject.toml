@@ -4,11 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yashserver"
-version = "1.0.0"
+version = "1.0.1"
 description = "Multi-protocol asyncio server toolkit: TCP, UDP, HTTP and WebSocket with TLS, auth, rate limiting, plugins and metrics. GitHub: https://github.com/ythbambaranda-sys/yashserver"
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{ name = "yashserver contributors" }]
+authors = [{ name = "Yasheen Bambaranda", email = "ythbambaranda@gmail.com" }]
+# Claude Opus 5 carries no email because it is not a contact point; reach the
+# project through the author above or the GitHub issue tracker.
+maintainers = [
+  { name = "Yasheen Bambaranda" },
+  { name = "Claude Opus 5" },
+]
 keywords = [
   "asyncio",
   "server",
